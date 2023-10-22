@@ -634,7 +634,7 @@ ppDeclaration decl = let source = declarationSource decl in
           n >= firstLine && Map.notMember n source
 
         firstLine =
-          maybe 0 fst $ Map.lookupMin source
+          fst $ Map.findMin source
 
         ppAnnot (style, doc) =
           markup (StyledLineNo style) ppEmptyNo <+>
