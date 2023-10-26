@@ -67,6 +67,8 @@ module Hedgehog.Internal.Gen (
 
   -- ** Enumeration
   , enum
+  , fastEnum
+  , fastEnumShrink
   , enumBounded
   , bool
   , bool_
@@ -242,6 +244,9 @@ import qualified Control.Monad.Fail as Fail
 #if __GLASGOW_HASKELL__ < 806
 import           Data.Coerce (coerce)
 #endif
+
+import System.Random (Random, randomR)
+import qualified Data.List as List
 
 ------------------------------------------------------------------------
 -- Generator transformer
@@ -820,9 +825,11 @@ integral range =
     origin_ =
       Range.origin range
 
+    binarySearchTree :: a -> a -> Tree a
     binarySearchTree bottom top =
       Tree.Tree $
         let
+          shrinks :: [a]
           shrinks =
             Shrink.towards bottom top
           children =
@@ -861,6 +868,51 @@ integralHelper range size seed =
     fromInteger . fst $
       Seed.nextInteger (toInteger x) (toInteger y) seed
 
+fastEnum :: (MonadGen m, Random a) => a -> a -> m a
+fastEnum lo hi = random_ (Range.constant lo hi)
+
+fastEnumShrink :: (MonadGen m, Random a, Eq a, Enum a) => a -> a -> m a
+fastEnumShrink lo hi = random (Range.constant lo hi)
+
+
+
+random :: forall m a. (MonadGen m, Eq a, Random a, Enum a) => Range a -> m a
+random range =
+  -- https://github.com/hedgehogqa/haskell-hedgehog/pull/413/files
+  let
+    origin_ =
+      Range.origin range
+
+    binarySearchTree :: a -> a -> Tree a
+    binarySearchTree bottom top =
+      Tree.Tree $
+        let
+          shrinks :: [a]
+          shrinks =
+            List.map toEnum $ Shrink.towards (fromEnum bottom) (fromEnum top)
+          children =
+            zipWith binarySearchTree shrinks (drop 1 shrinks)
+        in
+          Tree.NodeT top children
+
+    createTree root =
+      if root == origin_ then
+        pure root
+      else
+        hoist Morph.generalize $
+          Tree.consChild origin_ $
+            binarySearchTree origin_ root
+
+  in
+    fromGenT . GenT $ \size seed ->
+      createTree $ randomValue range size seed
+
+random_ :: (MonadGen m, Random a) => Range a -> m a
+random_ = generate . randomValue
+
+randomValue :: Random a => Range a -> Size -> Seed -> a
+randomValue range size = fst . randomR (Range.bounds size range)
+{-# INLINE randomValue #-}
 
 -- | Generates a random machine integer in the given @[inclusive,inclusive]@ range.
 --

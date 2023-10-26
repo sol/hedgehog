@@ -36,6 +36,7 @@ module Hedgehog.Internal.Seed (
   , split
   , nextInteger
   , nextDouble
+  , nextValue
 
   -- * Internal
   -- $internal
@@ -166,6 +167,9 @@ nextWord32 s0 =
 nextInteger :: Integer -> Integer -> Seed -> (Integer, Seed)
 nextInteger lo hi =
   Random.randomR (lo, hi)
+
+nextValue :: Random.Random a => a -> a -> Seed -> (a, Seed)
+nextValue lo hi = Random.randomR (lo, hi)
 
 -- | Generate a random 'Double' in the [inclusive,exclusive) range.
 --
